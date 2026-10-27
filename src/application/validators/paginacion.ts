@@ -1,6 +1,6 @@
 import { ValidationError } from '../../domain/errors/index.js';
 
-const ENTERO_POSITIVO = /^\d+$/;
+const ENTERO_POSITIVO = /^[1-9]\d*$/;
 const LIMITE_MAXIMO = 50;
 
 // page y limit son opcionales; por defecto 1 y 10. limit máximo 50.
