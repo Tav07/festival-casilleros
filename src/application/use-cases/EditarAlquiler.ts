@@ -1,7 +1,7 @@
 import type { AlquilerCasillero } from '../../domain/entities/AlquilerCasillero.js';
 import type { AlquilerCasilleroRepository } from '../../domain/repositories/AlquilerCasilleroRepository.js';
 import type { Tamano } from '../../domain/constants/casilleros.js';
-import { calcularPrecio } from '../../domain/constants/casilleros.js';
+import { CUPOS, calcularPrecio } from '../../domain/constants/casilleros.js';
 import { NotFoundError, ConflictError } from '../../domain/errors/index.js';
 import { validarIdDeRuta } from '../validators/enteros.js';
 import { validarEdicion } from '../validators/campos.js';
@@ -32,11 +32,19 @@ export class EditarAlquiler {
       throw new ConflictError('El alquiler ya fue devuelto y no se puede editar');
     }
 
-    // 6. Si cambia el tamaño se recalcula el precio.
-    //    TODO (fase de reglas de negocio): revalidar el cupo sin contarse a sí mismo.
+    // 6. Regla 5 — si cambia el tamaño se revalida el cupo del nuevo tamaño,
+    //    sin contarse a sí mismo; si el tamaño no cambia, no hay conflicto.
     let tamanoNuevo: Tamano | undefined = cambio.tamano;
     let precio = alquiler.precio;
     if (tamanoNuevo !== undefined && tamanoNuevo !== alquiler.tamano) {
+      const ocupados = await this.repositorio.contarEnUsoDeTamano(
+        alquiler.dia_id,
+        tamanoNuevo,
+        alquiler.id, // excluirse del conteo
+      );
+      if (ocupados >= CUPOS[tamanoNuevo]) {
+        throw new ConflictError(`No hay casilleros ${tamanoNuevo} disponibles para ese día`);
+      }
       precio = calcularPrecio(tamanoNuevo);
     } else {
       tamanoNuevo = undefined; // el tamaño no cambia: no hay que tocar nada
