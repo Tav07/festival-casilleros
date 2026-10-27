@@ -3,6 +3,8 @@ import express from 'express';
 import cors from 'cors';
 import { errorHandler } from './interface/http/middlewares/errorHandler.js';
 import { notFound } from './interface/http/middlewares/notFound.js';
+import { construirDependencias } from './interface/container.js';
+import { crearRouterCasilleros } from './interface/http/routes/alquileres-casillero.routes.js';
 
 const app = express();
 app.use(cors());
@@ -13,7 +15,9 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-// TODO: registrar las rutas /api/... de alquileres-casillero en las fases siguientes.
+const { controller } = construirDependencias();
+app.use('/api/alquileres-casillero', crearRouterCasilleros(controller));
+
 app.use(notFound);
 app.use(errorHandler);
 
