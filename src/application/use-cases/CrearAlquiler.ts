@@ -2,8 +2,9 @@ import type { AlquilerCasillero } from '../../domain/entities/AlquilerCasillero.
 import type { AlquilerCasilleroRepository } from '../../domain/repositories/AlquilerCasilleroRepository.js';
 import type { AsistenteReadRepository } from '../../domain/repositories/AsistenteReadRepository.js';
 import type { DiaReadRepository } from '../../domain/repositories/DiaReadRepository.js';
-import { NotFoundError } from '../../domain/errors/index.js';
-import { calcularPrecio } from '../../domain/constants/casilleros.js';
+import type { BoletaReadRepository } from '../../domain/repositories/BoletaReadRepository.js';
+import { CUPOS, calcularPrecio } from '../../domain/constants/casilleros.js';
+import { NotFoundError, ConflictError } from '../../domain/errors/index.js';
 import { validarCreacion } from '../validators/campos.js';
 
 export class CrearAlquiler {
@@ -11,6 +12,7 @@ export class CrearAlquiler {
     private repositorio: AlquilerCasilleroRepository,
     private asistentes: AsistenteReadRepository,
     private dias: DiaReadRepository,
+    private boletas: BoletaReadRepository,
   ) {}
 
   async ejecutar(body: unknown): Promise<AlquilerCasillero> {
@@ -25,7 +27,21 @@ export class CrearAlquiler {
       throw new NotFoundError('El día no existe');
     }
 
-    // TODO (fase de reglas de negocio): boleta del día, uno por día y cupo → 409.
+    // 3. Regla 1 — boleta del día (409).
+    if (!(await this.boletas.tieneBoletaActiva(entrada.asistente_id, entrada.dia_id))) {
+      throw new ConflictError('El asistente no tiene una boleta activa para ese día');
+    }
+
+    // 4. Regla 2 — máximo un alquiler EN_USO por asistente y día (409).
+    if (await this.repositorio.existeOtroEnUso(entrada.asistente_id, entrada.dia_id)) {
+      throw new ConflictError('El asistente ya tiene un casillero en uso ese día');
+    }
+
+    // 5. Regla 3 — cupo por tamaño y día (409).
+    const ocupados = await this.repositorio.contarEnUsoDeTamano(entrada.dia_id, entrada.tamano);
+    if (ocupados >= CUPOS[entrada.tamano]) {
+      throw new ConflictError(`No hay casilleros ${entrada.tamano} disponibles para ese día`);
+    }
 
     // El precio lo calcula el servidor según el tamaño.
     return this.repositorio.crear(entrada, calcularPrecio(entrada.tamano));
